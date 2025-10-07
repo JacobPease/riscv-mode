@@ -112,13 +112,55 @@
     ".extern"
     ".float"
     ".globl"
+	 ".global"
     ".half"
     ".kdata"
     ".ktext"
     ".space"
     ".text"
     ".word"
-    ".section"))
+    ".section"
+	 ".macro" ".endm"
+	 ".if" ".ifc" ".else" ".endif"
+	 ".option"
+	 ".set"))
+
+;; -------------------------------------------------------------------
+;; Indentation levels
+;; -------------------------------------------------------------------
+
+;; Indentation group
+(defgroup riscv-mode-indent nil
+  "Customize indentation of RISC-V assembly constructs."
+  :group 'riscv)
+
+(defcustom riscv-label-indent-level 3
+  "Indentation of RISC-V assembly labels."
+  :group `riscv-mode-indent)
+
+(defcustom riscv-code-indent-level 3
+  "Indentation of RISC-V assembly code."
+  :group `riscv-mode-indent)
+
+(defcustom riscv-macro-indent-level 3
+  "Indentation of RISC-V assembly macro blocks."
+  :group `riscv-mode-indent)
+
+;; -------------------------------------------------------------------
+;; Riscv faces
+;; -------------------------------------------------------------------
+
+(defface riscv-labels '((t :inherit font-lock-function-name-face))
+  "Face used for RISC-V assembly labels."
+  :group 'font-lock-highlighting-faces)
+
+(defface riscv-instructions '((t :inherit font-lock-keyword-face))
+  "Face used for RISCV instructions."
+  :group `font-lock-highlighting-faces)
+
+;; -------------------------------------------------------------------
+;; Search highlighting
+;; -------------------------------------------------------------------
 
 ;; (defconst riscv-font-lock-keywords
 ;;   `((("\\_<-?[0-9]+\\>" 0 font-lock-constant-face)
@@ -129,14 +171,27 @@
 ;;      (,riscv-registers . font-lock-type-face))))
 
 (defconst riscv-font-lock-keywords
-    `(("\\_<-?[0-9]+\\>" . font-lock-constant-face)             ; Decimal numbers
+    (append `(("\\_<-?[0-9]+\\>" . font-lock-constant-face)             ; Decimal numbers
     ("\\_<0[xX][0-9a-fA-F]+\\>" . font-lock-constant-face)    ; Hex numbers (add if missing)
     ("\"\\.\\*\\?" . font-lock-string-face)                   ; Strings
-    ("[A-Za-z][A-Za-z0-9_]*:" . font-lock-function-name-face) ; Labels (fixed case)
-    (,(regexp-opt riscv-keywords 'symbols) . font-lock-keyword-face)          ; Instructions
-    (,(regexp-opt riscv-defs t) . font-lock-preprocessor-face)         ; Directives
-    (,riscv-registers . font-lock-type-face)                  ; Registers
-    ))
+    ("[A-Za-z_][A-Za-z0-9_]*:" . 'riscv-labels) ; Labels (fixed case)
+    (,(regexp-opt riscv-keywords 'symbols) . 'riscv-instructions)          ; Instructions
+    (,(regexp-opt riscv-defs) . font-lock-preprocessor-face)         ; Directives
+    (,riscv-registers . font-lock-type-face))                  ; Registers
+    cpp-font-lock-keywords ))
+
+
+;; -------------------------------------------------------------------
+;; Syntax Table
+;; -------------------------------------------------------------------
+
+(defvar riscv-mode-syntax-table
+  (let ((st (make-syntax-table)))
+	 (modify-syntax-entry ?/ ". 124b" st)
+	 (modify-syntax-entry ?* ". 23" st)
+	 (modify-syntax-entry ?# "< b" st)
+	 (modify-syntax-entry ?\n "> b" st)
+	 st))
 
 (defcustom riscv-tab-width tab-width
   "Width of a tab for RISCV mode"
@@ -163,6 +218,15 @@
   "Return a buffer name for the preferred riscv interpreter"
   (format "*%s*" riscv-interpreter))
 
+;; -------------------------------------------------------------------
+;; Indentation functions
+;; -------------------------------------------------------------------
+
+(defun riscv--in-comment-p ()
+  "Return non-nil if the current point is inside a comment."
+  (nth 4 (syntax-ppss))
+  )
+
 (defun riscv--get-indent-level (&optional line)
   "Returns the number of spaces indenting the last label."
   (interactive)
@@ -180,17 +244,68 @@
   (save-excursion
     (previous-line)
     (end-of-line)
-    (re-search-backward "^[ \t]*\\w+:")
+    (re-search-backward "[A-Za-z_][A-Za-z0-9_]*:")
     (line-number-at-pos)))
+
+(defun riscv--last-directive-line ()
+  "Returns the line of the last label"
+  (save-excursion
+    (previous-line)
+    (end-of-line)
+    (re-search-backward "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?")
+    (line-number-at-pos)))
+
+(defun riscv--last-comment-line ()
+  "Returns the line of the last label"
+  (save-excursion
+    (previous-line)
+    (end-of-line)
+    (re-search-backward "^[ \t]*\\(/\\|#\\|*\\)+")
+    (line-number-at-pos)))
+
+(defun riscv-calculate-indentation ()
+  (let* ((lastlabel (riscv--last-label-line))
+			;; (lastlabel-comment-p (if (save-excursion
+			;; 									(goto-line (or lastlabel (line-number-at-pos)))
+			;; 									(riscv--in-comment-p)
+			;; 									)))
+		  (lastdirective (riscv--last-directive-line))
+		  (lastcomment (riscv--last-comment-line))
+		  (lastcomment-indent (riscv--get-indent-level lastcomment)))
+	 (cond
+	  ((looking-at "^[ \t]*\\w+:") 0) ; Looking at a label
+	  ((looking-at "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?") 0) ; Looking at a directive
+													 ;((looking-at "^[ \t]*\\(/\\|#\\|*\\)+") )
+	  ;((> lastcomment lastlabel) riscv-tab-width)
+													 ;((> lastlabel lastcomment) lastcomment-indent)
+	  ((> lastdirective lastlabel) 0)
+	  (t riscv-tab-width))
+	)
+  )
 
 (defun riscv-indent ()
   (interactive)
-  (indent-line-to (+ riscv-tab-width
-                     (riscv--get-indent-level (riscv--last-label-line)))))
+  (let* ((savep (point))
+			(indent (condition-case nil
+							(save-excursion
+							  (forward-line 0)
+							  (skip-chars-forward " \t")
+							  (if (>= (point) savep) (setq savep nil))
+							  (max (riscv-calculate-indentation) 0))
+							  (error 0))))
+	 (if savep
+		  (save-excursion (indent-line-to indent))
+		(indent-line-to indent))))
+
+
+  ;; (indent-line-to (+ riscv-tab-width
+  ;;                    (riscv--get-indent-level (riscv--last-label-line)))))
 
 (defun riscv-dedent ()
   (interactive)
   (indent-line-to (- (riscv--get-indent-level) riscv-tab-width)))
+
+;; -------------------------------------------------------------------
 
 (defun riscv-run-buffer ()
   "Run the current buffer in a riscv interpreter, and display the output in another window"
@@ -233,14 +348,24 @@ buffer's file"
   (interactive)
   (riscv-goto-label (word-at-point)))
 
+;; -------------------------------------------------------------------
+;; Define mode
+;; -------------------------------------------------------------------
+
 ;;;###autoload
 (define-derived-mode riscv-mode prog-mode "RISC V"
   "Major mode for editing RISC V assembly."
   (setq-local font-lock-defaults '(riscv-font-lock-keywords nil t nil nil))
   (setq-local tab-width riscv-tab-width)
   (setq-local indent-line-function 'riscv-indent)
-  (modify-syntax-entry ?# "< b" riscv-mode-syntax-table)
-  (modify-syntax-entry ?\n "> b" riscv-mode-syntax-table))
+  (set-syntax-table (make-syntax-table riscv-mode-syntax-table))
+
+  ;; Comments
+  (setq-local comment-start "# ")
+  (setq-local comment-end "")
+  (setq-local comment-start-skip "\\(?:\\s<+\\|/[/*]+\\)[ \t]*")
+  (setq-local comment-end-skip "[ \t]*\\(\\s>\\|\\*+/\\)")
+  )
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.riscv\\'" . riscv-mode))
