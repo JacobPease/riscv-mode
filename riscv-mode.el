@@ -117,15 +117,26 @@
     ".ktext"
     ".space"
     ".text"
-    ".word"))
+    ".word"
+    ".section"))
+
+;; (defconst riscv-font-lock-keywords
+;;   `((("\\_<-?[0-9]+\\>" 0 font-lock-constant-face)
+;;      ("\"\\.\\*\\?" 0 font-lock-string-face)
+;;      ("[A-z][A-z0-9_]*:" 0 font-lock-function-name-face)
+;;      (,(regexp-opt riscv-keywords) 0 font-lock-keyword-face)
+;;      (,(regexp-opt riscv-defs) 0 font-lock-preprocessor-face)
+;;      (,riscv-registers . font-lock-type-face))))
 
 (defconst riscv-font-lock-keywords
-  `((("\\_<-?[0-9]+\\>" . font-lock-constant-face)
-     ("\"\\.\\*\\?" . font-lock-string-face)
-     ("[A-z][A-z0-9_]*:" . font-lock-function-name-face)
-     (,(regexp-opt riscv-keywords) . font-lock-keyword-face)
-     (,(regexp-opt riscv-defs) . font-lock-preprocessor-face)
-     (,riscv-registers . font-lock-type-face))))
+    `(("\\_<-?[0-9]+\\>" . font-lock-constant-face)             ; Decimal numbers
+    ("\\_<0[xX][0-9a-fA-F]+\\>" . font-lock-constant-face)    ; Hex numbers (add if missing)
+    ("\"\\.\\*\\?" . font-lock-string-face)                   ; Strings
+    ("[A-Za-z][A-Za-z0-9_]*:" . font-lock-function-name-face) ; Labels (fixed case)
+    (,(regexp-opt riscv-keywords 'symbols) . font-lock-keyword-face)          ; Instructions
+    (,(regexp-opt riscv-defs t) . font-lock-preprocessor-face)         ; Directives
+    (,riscv-registers . font-lock-type-face)                  ; Registers
+    ))
 
 (defcustom riscv-tab-width tab-width
   "Width of a tab for RISCV mode"
@@ -225,7 +236,7 @@ buffer's file"
 ;;;###autoload
 (define-derived-mode riscv-mode prog-mode "RISC V"
   "Major mode for editing RISC V assembly."
-  (font-lock-add-keywords nil riscv-font-lock-keywords)
+  (setq-local font-lock-defaults '(riscv-font-lock-keywords nil t nil nil))
   (setq-local tab-width riscv-tab-width)
   (setq-local indent-line-function 'riscv-indent)
   (modify-syntax-entry ?# "< b" riscv-mode-syntax-table)
