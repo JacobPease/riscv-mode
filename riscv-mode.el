@@ -125,9 +125,23 @@
 	 ".option"
 	 ".set"))
 
+(defconst riscv-data-types
+  `(".dword"
+	 ".word"
+	 ".half"
+	 ".byte"
+	 ".double"
+	 ".float"))
+
 ;; -------------------------------------------------------------------
 ;; Indentation levels
 ;; -------------------------------------------------------------------
+
+(defcustom riscv-tab-width tab-width
+  "Width of a tab for RISCV mode"
+  :tag "Tab width"
+  :group 'riscv
+  :type 'integer)
 
 ;; Indentation group
 (defgroup riscv-mode-indent nil
@@ -174,7 +188,7 @@
     (append `(("\\_<-?[0-9]+\\>" . font-lock-constant-face)             ; Decimal numbers
     ("\\_<0[xX][0-9a-fA-F]+\\>" . font-lock-constant-face)    ; Hex numbers (add if missing)
     ("\"\\.\\*\\?" . font-lock-string-face)                   ; Strings
-    ("[A-Za-z_][A-Za-z0-9_]*:" . 'riscv-labels) ; Labels (fixed case)
+    ("[A-Za-z0-9_]*:" . 'riscv-labels)                     ; Labels
     (,(regexp-opt riscv-keywords 'symbols) . 'riscv-instructions)          ; Instructions
     (,(regexp-opt riscv-defs) . font-lock-preprocessor-face)         ; Directives
     (,riscv-registers . font-lock-type-face))                  ; Registers
@@ -192,12 +206,6 @@
 	 (modify-syntax-entry ?# "< b" st)
 	 (modify-syntax-entry ?\n "> b" st)
 	 st))
-
-(defcustom riscv-tab-width tab-width
-  "Width of a tab for RISCV mode"
-  :tag "Tab width"
-  :group 'riscv
-  :type 'integer)
 
 (defcustom riscv-interpreter "spike"
   "Interpreter to run riscv code in"
