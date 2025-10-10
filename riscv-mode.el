@@ -269,8 +269,11 @@
   (save-excursion
     (previous-line)
     (end-of-line)
-    (re-search-backward "^[ \t]*\\(/\\|#\\|*\\)+")
-    (line-number-at-pos)))
+    (condition-case nil
+		  (progn
+		  (re-search-backward "^[ \t]*\\(/\\|#\\|*\\)+")
+		  (line-number-at-pos))
+		(search-failed nil))))
 
 (defun riscv-calculate-indentation ()
   (let* ((lastlabel (riscv--last-label-line))
