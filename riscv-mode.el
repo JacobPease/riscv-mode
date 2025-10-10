@@ -123,7 +123,8 @@
 	 ".macro" ".endm"
 	 ".if" ".ifc" ".else" ".endif"
 	 ".option"
-	 ".set"))
+	 ".set"
+	 ".include"))
 
 (defconst riscv-data-types
   `(".dword"
