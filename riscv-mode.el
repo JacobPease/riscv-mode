@@ -248,21 +248,41 @@
        (beginning-of-line)
        (current-column))))
 
-(defun riscv--last-label-line ()
-  "Returns the line of the last label"
+(defun riscv--last-matching-line (regexp)
+  "Returns the line number of the last uncommented match."
   (save-excursion
-    (previous-line)
-    (end-of-line)
-    (re-search-backward "[A-Za-z_][A-Za-z0-9_]*:")
-    (line-number-at-pos)))
+    (let (label-line)
+      (while (not label-line)
+        (condition-case nil
+            (progn
+              (previous-line)
+              (end-of-line)
+              (re-search-backward regexp)
+				  (setq label-line
+                    (if (riscv--in-comment-p) ; Check if point is in a comment
+                        nil
+                      (line-number-at-pos))))
+          (search-failed (setq label-line nil))))
+      label-line)))
+
+(defun riscv--last-label-line ()
+  "Returns the line of the last label, excluding commented out labels."
+  (riscv--last-matching-line "[A-Za-z_][A-Za-z0-9_]*:"))
 
 (defun riscv--last-directive-line ()
-  "Returns the line of the last label"
-  (save-excursion
-    (previous-line)
-    (end-of-line)
-    (re-search-backward "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?")
-    (line-number-at-pos)))
+  "Returns the line of th"
+  (riscv--last-matching-line "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?"))
+
+;; (defun riscv--last-directive-line ()
+;;   "Returns the line of the last label"
+;;   (save-excursion
+;;     (previous-line)
+;;     (end-of-line)
+;; 	 (condition-case nil
+;; 		  (progn
+;; 		  (re-search-backward "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?")
+;; 		  (line-number-at-pos))
+;; 		(search-failed nil))))
 
 (defun riscv--last-comment-line ()
   "Returns the line of the last label"
@@ -275,6 +295,20 @@
 		  (line-number-at-pos))
 		(search-failed nil))))
 
+(defun riscv--check-label ()
+  "Check if the current line contains a label, possibly indented."
+  (save-excursion
+	 (beginning-of-line)
+	 (looking-at "^[ \t]*\\w+:"))
+  )
+
+(defun riscv--check-directive ()
+  "Check if the current line contains a directive, possibly indented."
+  (save-excursion
+	 (beginning-of-line)
+	 (looking-at "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?"))
+  )
+
 (defun riscv-calculate-indentation ()
   (let* ((lastlabel (riscv--last-label-line))
 			;; (lastlabel-comment-p (if (save-excursion
@@ -285,12 +319,13 @@
 		  (lastcomment (riscv--last-comment-line))
 		  (lastcomment-indent (riscv--get-indent-level lastcomment)))
 	 (cond
-	  ((looking-at "^[ \t]*\\w+:") 0) ; Looking at a label
-	  ((looking-at "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?") 0) ; Looking at a directive
+	  ((riscv--check-label) 0) ; Looking at a label
+	  ((riscv--check-directive) 0) ; Looking at a directive
 													 ;((looking-at "^[ \t]*\\(/\\|#\\|*\\)+") )
 	  ;((> lastcomment lastlabel) riscv-tab-width)
 													 ;((> lastlabel lastcomment) lastcomment-indent)
-	  ((> lastdirective lastlabel) 0)
+	  ((and (not (equal lastdirective nil)) (> lastdirective lastlabel)) 0)
+	  ((equal lastlabel nil) 0) ;; Handles the case where there are no previous labels.
 	  (t riscv-tab-width))
 	)
   )
