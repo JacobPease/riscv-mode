@@ -102,29 +102,44 @@
     "beqz" "bnez" "blez" "bgez" "btlz" "bgtz"
     "j" "jal" "jr" "jalr" "ret" "call" "tail"))
 
-(defconst riscv-defs
-  '(".align"
-    ".ascii"
-    ".asciiz"
-    ".byte"
-    ".data"
-    ".double"
-    ".extern"
-    ".float"
-    ".globl"
+;; (defconst riscv-defs
+;;   '(".align"
+;;     ".ascii"
+;;     ".asciiz"
+;;     ".byte"
+;;     ".data"
+;;     ".double"
+;;     ".extern"
+;;     ".float"
+;;     ".globl"
+;; 	 ".global"
+;;     ".half"
+;;     ".kdata"
+;;     ".ktext"
+;;     ".space"
+;;     ".text"
+;;     ".word"
+;;     ".section"
+;; 	 ".macro" ".endm"
+;; 	 ".if" ".ifc" ".else" ".endif"
+;; 	 ".option"
+;; 	 ".set"
+;; 	 ".include"))
+
+(defconst riscv-directives
+  `(".align"
+	 ".extern"
+	 ".globl"
 	 ".global"
-    ".half"
-    ".kdata"
-    ".ktext"
-    ".space"
-    ".text"
-    ".word"
-    ".section"
+	 ".kdata"
+	 ".ktext"
+	 ".section"
 	 ".macro" ".endm"
 	 ".if" ".ifc" ".else" ".endif"
 	 ".option"
 	 ".set"
-	 ".include"))
+	 ".include"
+	 ))
 
 (defconst riscv-data-types
   `(".dword"
@@ -132,7 +147,14 @@
 	 ".half"
 	 ".byte"
 	 ".double"
-	 ".float"))
+	 ".float"
+	 ".ascii"
+	 ".asciz"
+	 ".string"
+	 ".space"
+	 ".fill"))
+
+(defconst riscv-defs (append riscv-directives riscv-data-types))
 
 ;; -------------------------------------------------------------------
 ;; Indentation levels
@@ -231,6 +253,8 @@
 ;; Indentation functions
 ;; -------------------------------------------------------------------
 
+(defconst riscv-directives-regex (regexp-opt riscv-directives))
+
 (defun riscv--in-comment-p ()
   "Return non-nil if the current point is inside a comment."
   (nth 4 (syntax-ppss))
@@ -249,7 +273,7 @@
        (current-column))))
 
 (defun riscv--last-matching-line (regexp)
-  "Returns the line number of the last uncommented match."
+  "Returns the line number of the last non-commented match."
   (save-excursion
     (let (label-line)
       (while (not label-line)
@@ -266,26 +290,16 @@
       label-line)))
 
 (defun riscv--last-label-line ()
-  "Returns the line of the last label, excluding commented out labels."
+  "Returns the line of the last non-commented label."
   (riscv--last-matching-line "[A-Za-z_][A-Za-z0-9_]*:"))
 
 (defun riscv--last-directive-line ()
-  "Returns the line of th"
-  (riscv--last-matching-line "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?"))
-
-;; (defun riscv--last-directive-line ()
-;;   "Returns the line of the last label"
-;;   (save-excursion
-;;     (previous-line)
-;;     (end-of-line)
-;; 	 (condition-case nil
-;; 		  (progn
-;; 		  (re-search-backward "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?")
-;; 		  (line-number-at-pos))
-;; 		(search-failed nil))))
+  "Returns the line of the last non-commented directive."
+  ;; (riscv--last-matching-line "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?"))
+  (riscv--last-matching-line riscv-directives-regex))
 
 (defun riscv--last-comment-line ()
-  "Returns the line of the last label"
+  "Returns the line of the last comment."
   (save-excursion
     (previous-line)
     (end-of-line)
@@ -306,24 +320,18 @@
   "Check if the current line contains a directive, possibly indented."
   (save-excursion
 	 (beginning-of-line)
-	 (looking-at "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?"))
+	 ;(looking-at "^[ \t]*\\.\\w+ ?\\(\\sw+\\)?")
+	 (looking-at riscv-directives-regex))
   )
 
 (defun riscv-calculate-indentation ()
   (let* ((lastlabel (riscv--last-label-line))
-			;; (lastlabel-comment-p (if (save-excursion
-			;; 									(goto-line (or lastlabel (line-number-at-pos)))
-			;; 									(riscv--in-comment-p)
-			;; 									)))
 		  (lastdirective (riscv--last-directive-line))
 		  (lastcomment (riscv--last-comment-line))
 		  (lastcomment-indent (riscv--get-indent-level lastcomment)))
 	 (cond
 	  ((riscv--check-label) 0) ; Looking at a label
 	  ((riscv--check-directive) 0) ; Looking at a directive
-													 ;((looking-at "^[ \t]*\\(/\\|#\\|*\\)+") )
-	  ;((> lastcomment lastlabel) riscv-tab-width)
-													 ;((> lastlabel lastcomment) lastcomment-indent)
 	  ((and (not (equal lastdirective nil)) (> lastdirective lastlabel)) 0)
 	  ((equal lastlabel nil) 0) ;; Handles the case where there are no previous labels.
 	  (t riscv-tab-width))
