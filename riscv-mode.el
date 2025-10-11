@@ -139,6 +139,10 @@
 	 ".option"
 	 ".set"
 	 ".include"
+	 ".text"
+	 ".data"
+	 ".equ" ".EQU"
+	 ".bss"
 	 ))
 
 (defconst riscv-data-types
@@ -150,6 +154,7 @@
 	 ".float"
 	 ".ascii"
 	 ".asciz"
+	 ".asciiz"
 	 ".string"
 	 ".space"
 	 ".fill"))
@@ -313,7 +318,7 @@
   "Check if the current line contains a label, possibly indented."
   (save-excursion
 	 (beginning-of-line)
-	 (looking-at "^[ \t]*\\w+:"))
+	 (looking-at "^[ \t]*\\(\\w\\|_\\)+:"))
   )
 
 (defun riscv--check-directive ()
